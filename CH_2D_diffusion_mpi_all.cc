@@ -904,27 +904,27 @@ void MultiPhaseFlowProblem<dim>::output_results () const
 //  system_rhs.block(1).print(output6);
 //  output6.close();
 //
-    std::ofstream output8;
-   output8.open ("kk.txt");
-   solution[0].block(1).print(output8);
-   output8.close();
-
-   std::vector<std::string> solution_names;
-
-       solution_names.push_back ("c1");
-
-   DataOut<dim> data_out;
-
-   data_out.attach_dof_handler (system_dof_handler);
-   data_out.add_data_vector (solution[0].block(1), solution_names);
-
-   data_out.build_patches ();
-
-   std::ostringstream filename;
-   filename << "solution-" << timestep_number << ".gpl";
-
-   std::ofstream output (filename.str().c_str());
-   data_out.write_gnuplot (output);
+//    std::ofstream output8;
+//   output8.open ("kk.txt");
+//   solution[0].block(1).print(output8);
+//   output8.close();
+//
+//   std::vector<std::string> solution_names;
+//
+//       solution_names.push_back ("c1");
+//
+//   DataOut<dim> data_out;
+//
+//   data_out.attach_dof_handler (system_dof_handler);
+//   data_out.add_data_vector (solution[0].block(1), solution_names);
+//
+//   data_out.build_patches ();
+//
+//   std::ostringstream filename;
+//   filename << "solution-" << timestep_number << ".gpl";
+//
+//   std::ofstream output (filename.str().c_str());
+//   data_out.write_gnuplot (output);
 }
 
 template <int dim>
