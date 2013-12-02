@@ -54,6 +54,7 @@
 #include <limits>
 #include <locale>
 #include <string>
+#include <algorithm> 
 
 #include <deal.II/distributed/solution_transfer.h>
 #include <deal.II/base/index_set.h>
@@ -71,6 +72,7 @@ namespace EquationData
   const double Pe = 100;  //300.0;
   const double velocity[] = {0,0,0};
   const double alpha = 1; 
+  const double Eps = 0.01;
   
   //Added 11.27
   const double s_t[] = {1,0.8,1.4};
@@ -207,6 +209,44 @@ class IdentityPreconditioner : public Subscriptor
   }
 }
 
+//=============== Initial Conditions ==================
+ template <int dim>
+  class InitialValuesC1 : public Function<dim>
+  {
+  public:
+    InitialValuesC1 () : Function<dim>() {}
+    virtual double value (const Point<dim>   &p,
+                          const unsigned int  component = 0) const;
+  };
+  template <int dim>
+  class InitialValuesC2 : public Function<dim>
+  {
+  public:
+    InitialValuesC2 () : Function<dim>() {}
+    virtual double value (const Point<dim>   &p,
+                          const unsigned int  component = 0) const;
+  };
+  
+  template <int dim>
+  double InitialValuesC1<dim>::value (const Point<dim>  &p,
+                                     const unsigned int component) const
+  {
+    Assert (component == 0, ExcInternalError());
+    double c1;
+    c1 = 0.5*(1+std::tanh(2.0/EquationData::Eps*std::min(p.norm()-0.1,p[1])))
+
+    return c1;
+  }  
+
+  template <int dim>
+  double InitialValuesC2<dim>::value (const Point<dim>  &p,
+                                     const unsigned int component) const
+  {
+    Assert (component == 0, ExcInternalError());
+    double c2;
+    c2 = 0.5*(1-std::tanh(2.0/EquationData::Eps*std::max(-p.norm()+0.1,p[1])))
+   return c2;
+  }
 
 
 /////////////The MultiPhaseFlowProblem class///////////
@@ -950,6 +990,13 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
   //computing_timer.enter_section("Assemble constant matrices");
   assemble_constant_matrix ();
   //computing_timer.exit_section();
+  VectorTools::project (dof_handler, matrix_constraints, QGauss<dim>(2),
+                        InitialValuesC1<dim>(),
+                        old_solution[0]);
+  VectorTools::project (dof_handler, matrix_constraints, QGauss<dim>(2),
+                        InitialValuesC2<dim>(),
+                        old_solution[1]);
+
 
   TrilinosWrappers::MPI::BlockVector  init_sol[NUMBEROFPHASES-1];
 
@@ -966,7 +1013,7 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
      Vector<double> local_init (dofs_per_cell);
      std::vector<unsigned int> local_dof_indices (dofs_per_cell);
 
-     for (; cell!=endc; ++cell)
+/*     for (; cell!=endc; ++cell)
        {
         if (cell->is_locally_owned())
         {	
@@ -979,7 +1026,8 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
   	     matrix_constraints.distribute_local_to_global (local_init,
                     local_dof_indices, old_solution[Index].block(1));
         }
-      }
+      }*/
+
 
     old_solution[Index].compress(VectorOperation::add);
     init_sol[Index] = old_solution[Index];
@@ -1065,11 +1113,11 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
 	      << std::endl;
 
       }
-    while (timestep_number <= 10);//(time < (10*time_step));
+    while (timestep_number <= 1);//(time < (10*time_step));
     computing_timer.print_summary ();
     ++repeat;
   }
-  while(repeat<=3);
+  while(repeat<=1);
   output_results ();
 }
 
