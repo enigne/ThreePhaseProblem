@@ -233,7 +233,7 @@ class IdentityPreconditioner : public Subscriptor
   {
     Assert (component == 0, ExcInternalError());
     double c1;
-    c1 = 0.5*(1+std::tanh(2.0/EquationData::Eps*std::min(p.norm()-0.1,p[1])))
+    c1 = 0.5*(1+std::tanh(2.0/EquationData::Eps*std::min(p.norm()-0.1,p[1])));
 
     return c1;
   }  
@@ -244,7 +244,7 @@ class IdentityPreconditioner : public Subscriptor
   {
     Assert (component == 0, ExcInternalError());
     double c2;
-    c2 = 0.5*(1-std::tanh(2.0/EquationData::Eps*std::max(-p.norm()+0.1,p[1])))
+    c2 = 0.5*(1-std::tanh(2.0/EquationData::Eps*std::max(-p.norm()+0.1,p[1])));
    return c2;
   }
 
@@ -324,7 +324,7 @@ template <int dim>
 template <int dim>
  void MultiPhaseFlowProblem<dim>::make_grid_and_dofs ()
  {
-   GridGenerator::hyper_cube (triangulation, 0, 1);
+   GridGenerator::hyper_rectangle(triangulation, Point<dim>(-0.3,0.15), Point<dim>(0.3,-0.15));
    triangulation.refine_global (n_refinement_steps);
  
    dof_handler.distribute_dofs (fe);
@@ -949,22 +949,22 @@ void MultiPhaseFlowProblem<dim>::output_results () const
 //   solution[0].block(1).print(output8);
 //   output8.close();
 //
-//   std::vector<std::string> solution_names;
-//
-//       solution_names.push_back ("c1");
-//
-//   DataOut<dim> data_out;
-//
-//   data_out.attach_dof_handler (system_dof_handler);
-//   data_out.add_data_vector (solution[0].block(1), solution_names);
-//
-//   data_out.build_patches ();
-//
-//   std::ostringstream filename;
-//   filename << "solution-" << timestep_number << ".gpl";
-//
-//   std::ofstream output (filename.str().c_str());
-//   data_out.write_gnuplot (output);
+   std::vector<std::string> solution_names;
+
+       solution_names.push_back ("c1");
+
+   DataOut<dim> data_out;
+
+   data_out.attach_dof_handler (system_dof_handler);
+   data_out.add_data_vector (solution[0].block(1), solution_names);
+
+   data_out.build_patches ();
+
+   std::ostringstream filename;
+   filename << "solution-" << timestep_number << ".gpl";
+
+   std::ofstream output (filename.str().c_str());
+   data_out.write_gnuplot (output);
 }
 
 template <int dim>
@@ -992,10 +992,10 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
   //computing_timer.exit_section();
   VectorTools::project (dof_handler, matrix_constraints, QGauss<dim>(2),
                         InitialValuesC1<dim>(),
-                        old_solution[0]);
+                        old_solution[0].block(1));
   VectorTools::project (dof_handler, matrix_constraints, QGauss<dim>(2),
                         InitialValuesC2<dim>(),
-                        old_solution[1]);
+                        old_solution[1].block(1));
 
 
   TrilinosWrappers::MPI::BlockVector  init_sol[NUMBEROFPHASES-1];
@@ -1034,6 +1034,8 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
     solution[Index] = old_solution[Index];
 
   }
+
+  output_results ();
   //timestep_number = 1;
   double time;
 
@@ -1099,7 +1101,7 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
 	      << std::endl;
 	
 	computing_timer.enter_section("Solve nonlinear system (replace)");
-	solve_replace ();
+	//solve_replace ();
 	computing_timer.exit_section("Solve nonlinear system (replace)");
 
   for (int Index=0; Index<NUMBEROFPHASES-1;Index++) 
@@ -1118,7 +1120,7 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
     ++repeat;
   }
   while(repeat<=1);
-  output_results ();
+ // output_results ();
 }
 
 int main (int argc, char *argv[])
