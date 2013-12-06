@@ -75,8 +75,8 @@ namespace EquationData
   const double Eps = 0.01;
   
   //Added 11.27
-  const double s_t[] = {1,1,3};// Total spread
-  //const double s_t[] = {1,0.8,1.4}; // Partial spread
+  //const double s_t[] = {1,1,3};// Total spread
+  const double s_t[] = {1,0.8,1.4}; // Partial spread
   const double sigma[] = { (s_t[1] + s_t[2]- s_t[0]),
   (s_t[0] + s_t[2]- s_t[1]),
   (s_t[0] + s_t[1]- s_t[2])};
@@ -211,6 +211,7 @@ class IdentityPreconditioner : public Subscriptor
 }
 
 //=============== Initial Conditions ==================
+
  template <int dim>
   class InitialValuesC1 : public Function<dim>
   {
@@ -265,7 +266,7 @@ class MultiPhaseFlowProblem
     void assemble_system_replace ();
     void solve();
     void solve_replace();
-    void output_results() const;
+    void output_results(const int) const;
 
     ConditionalOStream pcout;
 
@@ -595,6 +596,7 @@ template <int dim>
            solution_df2[k] = EquationData::sigma[0]*c1*c1*(c2+c3) + 
 			     EquationData::sigma[1]*c2*(c1+c3)*(c1+c3) + 
                              EquationData::sigma[2]*c3*c3*(c1+c2);
+
            solution_df3[k] = EquationData::sigma[0]*c1*c1*(c2+c3) + 
                              EquationData::sigma[1]*c2*c2*(c1+c3) + 
 			     EquationData::sigma[2]*c3*(c1+c2)*(c1+c2);
@@ -688,21 +690,20 @@ void MultiPhaseFlowProblem<dim>::solve_replace ()
        double temp_norm = 0.0;
 
        for (int i = 0; i < NUMBEROFPHASES-1; i++) {
-        //TrilinosWrappers::MPI::BlockVector  temp_sol(solution[i]);
+       TrilinosWrappers::MPI::BlockVector  temp_sol(solution[i]);
 
-       //computing_timer.enter_section("Multiply preconditioner");
-        preconditioner.vmult(lin_solution[i],  system_rhs[i]);
-       //computing_timer.exit_section("Multiply preconditioner");
+       computing_timer.enter_section("Multiply preconditioner");
+       preconditioner.vmult(lin_solution[i],  system_rhs[i]);
+       computing_timer.exit_section("Multiply preconditioner");
        //matrix_constraints.distribute(lin_solution);
-        temp_norm += lin_solution[i].l2_norm()*lin_solution[i].l2_norm();
+       temp_norm += lin_solution[i].l2_norm()*lin_solution[i].l2_norm();
        //norm_crit = lin_solution.block(1).l2_norm();
 
-        solution[i] -= lin_solution[i];
-
+        temp_sol = lin_solution[i];
+        solution[i] -= temp_sol;
       }
 //      pcout << "The norm of the nonlinear solution: "<<temp_norm << std::endl;
       norm_crit = std::sqrt(temp_norm);
-       //temp_sol = lin_solution;
    }
    pcout << "   "
              << nonlin_it
@@ -710,71 +711,35 @@ void MultiPhaseFlowProblem<dim>::solve_replace ()
              << std::endl
              << "   "
              << "Average "
-             << LinearSolvers::cg_it/nonlin_it/2
+             << LinearSolvers::cg_it/nonlin_it/4
              << " CG iterations for system."
              << std::endl;
       
 }
 
 template <int dim>
-void MultiPhaseFlowProblem<dim>::output_results () const
+void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
 {
-//  std::ofstream output1;
-//  output1.open ("A.txt");
-//  system_matrix.block(0,0).print(output1);
-//  output1.close();
-//
-//  std::ofstream output2;
-//  output2.open ("B.txt");
-//  system_matrix.block(0,1).print(output2);
-//  output2.close();
-//
-//  std::ofstream output3;
-//  output3.open ("C.txt");
-//  system_matrix.block(1,0).print(output3);
-//  output3.close();
-//
-//  std::ofstream output4;
-//  output4.open ("D.txt");
-//  system_matrix.block(1,1).print(output4);
-//  output4.close();
-//
-//  std::ofstream output7;
-//  output7.open ("AMG.txt");
-//  AMG_matrix.print(output7);
-//  output7.close();
-//
-//  std::ofstream output5;
-//  output5.open ("F.txt");
-//  system_rhs.block(0).print(output5);
-//  output5.close();
-//
-//  std::ofstream output6;
-//  output6.open ("G.txt");
-//  system_rhs.block(1).print(output6);
-//  output6.close();
-//
-//    std::ofstream output8;
-//   output8.open ("kk.txt");
-//   solution[0].block(1).print(output8);
-//   output8.close();
-//
+    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 3)
+{
    std::vector<std::string> solution_names;
 
-   solution_names.push_back ("c1");
+   solution_names.push_back ("c"+std::to_string(pI));
 
    DataOut<dim> data_out;
 
-   data_out.attach_dof_handler (system_dof_handler);
-   data_out.add_data_vector (solution[0].block(1), solution_names);
+   data_out.attach_dof_handler (dof_handler);
+   data_out.add_data_vector (solution[pI-1].block(1), solution_names);
 
    data_out.build_patches ();
 
    std::ostringstream filename;
-   filename << "solution-" << timestep_number << ".gpl";
+   filename << "solution-c" << pI << "-" << timestep_number << ".gpl";
 
    std::ofstream output (filename.str().c_str());
    data_out.write_gnuplot (output);
+   output.close();
+}
 }
 
 template <int dim>
@@ -785,7 +750,7 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
   
   time_step = std::pow(0.5, double(n_refinement_steps));
   pcout << "Mesh size: " << time_step<< std::endl;
-  time_step = time_step/10;//*time_step;
+  time_step = time_step/10.0;//*time_step;
   pcout << "Time step: " <<time_step<< std::endl;
 
   aeps = 0.75*(EquationData::Cahn*EquationData::Cahn)/time_step;
@@ -800,45 +765,58 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
   //computing_timer.enter_section("Assemble constant matrices");
   assemble_constant_matrix ();
   //computing_timer.exit_section();
-  VectorTools::project (dof_handler, matrix_constraints, QGauss<dim>(2),
+/*  VectorTools::project (dof_handler, matrix_constraints, QGauss<dim>(2),
                         InitialValuesC1<dim>(),
                         old_solution[0].block(1));
   VectorTools::project (dof_handler, matrix_constraints, QGauss<dim>(2),
                         InitialValuesC2<dim>(),
                         old_solution[1].block(1));
-
+*/
 
   TrilinosWrappers::MPI::BlockVector  init_sol[NUMBEROFPHASES-1];
 
   for (int Index=0; Index < NUMBEROFPHASES-1; Index++) {
     old_solution[Index].block(0)= 0.0;
-    //init_sol[Index] = new TrilinosWrappers::MPI::BlockVector(solution[Index]);
-    init_sol[Index] = solution[Index];
+   // init_sol[Index] = TrilinosWrappers::MPI::BlockVector(solution[Index]);
+    init_sol[Index].reinit(solution[Index]);
     typename DoFHandler<dim>::active_cell_iterator
        cell = dof_handler.begin_active(),
        endc = dof_handler.end();
 
      unsigned int dofs_per_cell = fe.dofs_per_cell;
-     double rand_values; 
+     double c1,c2; 
      Vector<double> local_init (dofs_per_cell);
      std::vector<unsigned int> local_dof_indices (dofs_per_cell);
+     Point<dim> p;
 
-/*     for (; cell!=endc; ++cell)
+     for (; cell!=endc; ++cell)
        {
         if (cell->is_locally_owned())
         {	
   	     for(unsigned int i=0; i<dofs_per_cell;i++)
   	     { 
-  	       rand_values = static_cast<double>(rand())/RAND_MAX;
-  	       local_init(i)= (rand_values-0.5)*0.01;
+  	       //rand_values = static_cast<double>(rand())/RAND_MAX;
+  	       p = cell->vertex(i);
+               c1 = 0.5*(1+std::tanh(2.0/EquationData::Eps*std::min(p.norm()-0.1,p[1])));
+               c2 = 0.5*(1-std::tanh(2.0/EquationData::Eps*std::max(-p.norm()+0.1,p[1])));
+               if (p[0] == -0.3 || p[0] == 0.3 || p[1] == -0.15 || p[1] == 0.15) {
+                   if ((p[0] == -0.3 || p[0] == 0.3) && (p[1] == -0.15 || p[1] == 0.15))
+                       local_init(i) = 1;
+                   else
+                       local_init(i) = 0.5;
+               }
+               else 
+  	           local_init(i)= 0.25;//((Index == 0) ? c1:c2);
+               local_init(i) *= ((Index == 0)?c1:c2);
   	     }
   	     cell->get_dof_indices (local_dof_indices);
   	     matrix_constraints.distribute_local_to_global (local_init,
                     local_dof_indices, old_solution[Index].block(1));
         }
-      }*/
+      }
 
 
+    
     old_solution[Index].compress(VectorOperation::add);
     init_sol[Index] = old_solution[Index];
     solution[Index] = old_solution[Index];
@@ -877,9 +855,9 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
 	pcout << "Timestep " << timestep_number
 	      << std::endl;
 	
-	computing_timer.enter_section("Solve nonlinear system (replace)");
+	computing_timer.enter_section("Solve nonlinear system");
 	solve_replace ();
-	computing_timer.exit_section("Solve nonlinear system (replace)");
+	computing_timer.exit_section("Solve nonlinear system");
 
   for (int Index=0; Index<NUMBEROFPHASES-1;Index++) 
 	   old_solution[Index] = solution[Index];
@@ -892,13 +870,14 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
 	      << std::endl;
 
       }
-    //while (timestep_number <= 10);//(time < (10*time_step));
-    while (time <= 3.5);//(time < (10*time_step));
-    computing_timer.print_summary ();
+    while (timestep_number <= 20);//(time < (10*time_step));
+    //while (time <= 3.5);//(time < (10*time_step));
+//    computing_timer.print_summary ();
     ++repeat;
   }
   while(repeat<=1);
-  output_results ();
+//  output_results(2);
+//  output_results (2);
 }
 
 int main (int argc, char *argv[])
