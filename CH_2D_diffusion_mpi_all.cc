@@ -64,6 +64,7 @@
 
 using namespace dealii;
 #define NUMBEROFPHASES 3
+#define TOTALSPREAD_ON
 
 namespace EquationData
 {
@@ -75,13 +76,17 @@ namespace EquationData
   const double Eps = 0.01;
   
   //Added 11.27
-  //const double s_t[] = {1,1,3};// Total spread
+#ifdef TOTALSPREAD_ON
+  const double s_t[] = {3,1,1};// Total spread
+  const double Lambda = 7;
+#else
   const double s_t[] = {1,0.8,1.4}; // Partial spread
+  const double Lambda = 0;
+#endif
   const double sigma[] = { (s_t[1] + s_t[2]- s_t[0]),
   (s_t[0] + s_t[2]- s_t[1]),
   (s_t[0] + s_t[1]- s_t[2])};
   const double sigmaT =  3/(1/sigma[1]+1/sigma[2]+1/sigma[0]);
-  const double Lambda = 0;
 }
 
 ////////////////////////linear solver////////////////////////////////////
@@ -591,15 +596,18 @@ template <int dim>
            c3 = 1 - c1 - c2;
            solution_df1[k] = EquationData::sigma[0]*c1*(c2+c3)*(c2+c3) +
 		 	     EquationData::sigma[1]*c2*c2*(c1+c3) + 
-			     EquationData::sigma[2]*c3*c3*(c1+c2);
+			     EquationData::sigma[2]*c3*c3*(c1+c2) +
+                             6*EquationData::Lambda*c1*c2*c2*c3*c3;
 
            solution_df2[k] = EquationData::sigma[0]*c1*c1*(c2+c3) + 
 			     EquationData::sigma[1]*c2*(c1+c3)*(c1+c3) + 
-                             EquationData::sigma[2]*c3*c3*(c1+c2);
+                             EquationData::sigma[2]*c3*c3*(c1+c2) +
+                             6*EquationData::Lambda*c1*c1*c2*c3*c3;
 
            solution_df3[k] = EquationData::sigma[0]*c1*c1*(c2+c3) + 
                              EquationData::sigma[1]*c2*c2*(c1+c3) + 
-			     EquationData::sigma[2]*c3*(c1+c2)*(c1+c2);
+			     EquationData::sigma[2]*c3*(c1+c2)*(c1+c2) +
+                             6*EquationData::Lambda*c1*c1*c2*c2*c3;
           
        }
        for (unsigned int q=0; q<n_q_points; ++q)
@@ -701,6 +709,7 @@ void MultiPhaseFlowProblem<dim>::solve_replace ()
 
         temp_sol = lin_solution[i];
         solution[i] -= temp_sol;
+pcout<< norm_crit << endl;
       }
 //      pcout << "The norm of the nonlinear solution: "<<temp_norm << std::endl;
       norm_crit = std::sqrt(temp_norm);
@@ -720,7 +729,7 @@ void MultiPhaseFlowProblem<dim>::solve_replace ()
 template <int dim>
 void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
 {
-    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 3)
+    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
 {
    std::vector<std::string> solution_names;
 
@@ -728,7 +737,7 @@ void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
 
    DataOut<dim> data_out;
 
-   data_out.attach_dof_handler (dof_handler);
+   data_out.attach_dof_handler (system_dof_handler);
    data_out.add_data_vector (solution[pI-1].block(1), solution_names);
 
    data_out.build_patches ();
@@ -876,8 +885,8 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
     ++repeat;
   }
   while(repeat<=1);
+  output_results(1);
 //  output_results(2);
-//  output_results (2);
 }
 
 int main (int argc, char *argv[])
