@@ -61,12 +61,15 @@ using namespace dealii;
 
 //====================== Macro for the problem =====================
 #define NUMBEROFPHASES 3    // number of phases
-#define TOTALSPREAD_OFF     // TOATLSPREAD_ON for total spreading,
+#define TOTALSPREAD_ON      // TOATLSPREAD_ON for total spreading,
                             // TOTALSPREAD_OFF for partial spreading. 
+#define NODETAILED_OUTPUT   // NODETAILED_OUTPUT for no output in each time loop
+                            // DETAILED_OUTPUT for all output
 
 //============== Data for the three phase model =====================
 namespace EquationData
 {
+    // Physical Variables
 	const double Reno = 1.0;
 	const double Cahn = 0.01;
 	const double Pe = 100;
@@ -74,6 +77,20 @@ namespace EquationData
 	const double alpha = 1;
 	const double Eps = 0.01;
 	
+    // Domain
+    const double x_min = -0.3;
+    const double x_max = 0.3;
+    const double y_min = -0.15;
+    const double y_max = 0.15;
+
+    // Time
+    const double divH = 16; // means dt=h/4
+    const double final_time_step = 20;
+
+    // Number of repeat tests
+    const double num_repeat = 1;  
+
+    // Phases parameters for three phase problem
 #ifdef TOTALSPREAD_ON
 	const double s_t[] = {3,1,1};// Total spreading
 	const double Lambda = 7;
@@ -81,7 +98,6 @@ namespace EquationData
 	const double s_t[] = {1,0.8,1.4}; // Partial spreading
 	const double Lambda = 0;
 #endif
-
 
 	const double sigma[] = { (s_t[1] + s_t[2]- s_t[0]),
 	                         (s_t[0] + s_t[2]- s_t[1]),
@@ -285,8 +301,8 @@ template <int dim>
 void MultiPhaseFlowProblem<dim>::make_grid_and_dofs ()
 {
     // -------------------------- Set the dimension and domain here --------------------------
-    // For 3D it should be hyper_cube
-    GridGenerator::hyper_rectangle(triangulation, Point<dim>(-0.3,0.15), Point<dim>(0.3,-0.15));
+    // For squared mesh it should be hyper_cube
+    GridGenerator::hyper_rectangle(triangulation, Point<dim>(x_min,y_max), Point<dim>(x_max,y_min));
     // ---------------------------------------------------------------------------------------
     
     triangulation.refine_global (n_refinement_steps);   // Number of refinement n
@@ -300,11 +316,8 @@ void MultiPhaseFlowProblem<dim>::make_grid_and_dofs ()
     pcout << "Number of active cells: "
           << triangulation.n_global_active_cells()
           << std::endl
-          << "Number of degrees of freedom: "
-          << n_u
-          << std::endl
-          << "Number of degrees of freedom(system): "
-          << n_s
+          << "Number of degrees of freedom : "
+          << n_u * 4
           << std::endl;
 
     std::vector<IndexSet> system_partitioning, system_relevant_partitioning;
@@ -647,6 +660,8 @@ void MultiPhaseFlowProblem<dim>::solve
         }
         norm_crit = std::sqrt(temp_norm);
     }
+
+#ifdef TAILED_OUTPUT
     pcout << "   "
           << nonlin_it
           << " nonlinear iterations for system."
@@ -656,6 +671,7 @@ void MultiPhaseFlowProblem<dim>::solve
           << LinearSolvers::cg_it/nonlin_it/4
           << " CG iterations for system."
           << std::endl;
+#endif
 
 }
 //------------------Output function ----------------------
@@ -676,10 +692,10 @@ void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
         data_out.build_patches ();
 
         std::ostringstream filename;
-        filename << "solution-c" << pI << "-" << timestep_number << ".gpl";
+        filename << "solution-c" << pI << "-" << timestep_number << ".vtu";
 
         std::ofstream output (filename.str().c_str());
-        data_out.write_gnuplot (output);
+        data_out.write_vtu (output);
         output.close();
     }
 }
@@ -688,13 +704,16 @@ void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
 template <int dim>
 void MultiPhaseFlowProblem<dim>::run (int n_refs)
 {
+    double mesh_size;
     n_refinement_steps = n_refs;
     pcout << "Number of refinements: " <<n_refinement_steps<< std::endl;
-    time_step = std::pow(0.5, double(n_refinement_steps))*0.15*0.5;
-    pcout << "Mesh size: " << time_step<< std::endl;
+    mesh_size = std::pow(0.5, double(n_refinement_steps))*
+                    std::min(std::abs(EquationData::x_max-EquationData::x_min),
+                    std::abs(EquationData::y_max-EquationData::y_min));
+    pcout << "Mesh size: " << mesh_size<< std::endl;
 	
 	// Choose the time step dt = h/10
-    time_step = time_step/10.0;
+    time_step = mesh_size / EquationData::divH;
     pcout << "Time step: " <<time_step<< std::endl;
 
     aeps = 0.75*(EquationData::Cahn*EquationData::Cahn)/time_step;
@@ -737,9 +756,11 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
                     p = cell->vertex(i);
                     c1 = 0.5*(1+std::tanh(2.0/EquationData::Eps*std::min(p.norm()-0.1,p[1])));
                     c2 = 0.5*(1-std::tanh(2.0/EquationData::Eps*std::max(-p.norm()+0.1,p[1])));
-                    if (p[0] == -0.3 || p[0] == 0.3 || p[1] == -0.15 || p[1] == 0.15)
+                    if (p[0] == EquationData::x_min || p[0] == EquationData::x_max || 
+                        p[1] == EquationData::y_min || p[1] == EquationData::y_max)
                     {
-                        if ((p[0] == -0.3 || p[0] == 0.3) && (p[1] == -0.15 || p[1] == 0.15))
+                        if ((p[0] == EquationData::x_min || p[0] == EquationData::x_max) && 
+                            (p[1] == EquationData::y_min || p[1] == EquationData::y_max))
                             local_init(i) = 1;
                         else
                             local_init(i) = 0.5;
@@ -806,15 +827,14 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
                   << ", dt=" << time_step << '.'
                   << std::endl
                   << std::endl;
-
         }
-        while (timestep_number <= 10);
+        while (timestep_number <= EquationData::final_time_step);
 
         // Output timer information
         computing_timer.print_summary ();
         ++repeat;
     }
-    while(repeat<=3);
+    while(repeat<=EquationData::num_repeat);
 }
 
 int main (int argc, char *argv[])
