@@ -61,9 +61,9 @@ using namespace dealii;
 
 //====================== Macro for the problem =====================
 #define NUMBEROFPHASES 3    // number of phases
-#define TOTALSPREAD_ON      // TOATLSPREAD_ON for total spreading,
+#define TOTALSPREAD_OFF      // TOATLSPREAD_ON for total spreading,
                             // TOTALSPREAD_OFF for partial spreading. 
-#define NODETAILED_OUTPUT   // NODETAILED_OUTPUT for no output in each time loop
+#define DETAILED_OUTPUT   // NODETAILED_OUTPUT for no output in each time loop
                             // DETAILED_OUTPUT for all output
 
 //============== Data for the three phase model =====================
@@ -84,8 +84,8 @@ namespace EquationData
     const double y_max = 0.15;
 
     // Time
-    const double divH = 16; // means dt=h/4
-    const double final_time_step = 20;
+    const double divH = 3; // means dt=h/4
+    const double final_time_step = 20; //Default timestep
 
     // Number of repeat tests
     const double num_repeat = 1;  
@@ -662,7 +662,7 @@ void MultiPhaseFlowProblem<dim>::solve
         norm_crit = std::sqrt(temp_norm);
     }
 
-#ifdef TAILED_OUTPUT
+#ifndef NODETAIL_OUTPUT
     pcout << "   "
           << nonlin_it
           << " nonlinear iterations for system."
@@ -824,10 +824,13 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
 
             time += time_step;
             ++timestep_number;
+
+#ifndef NODETAIL_OUTPUT
             pcout << "   Now at t=" << time
                   << ", dt=" << time_step << '.'
                   << std::endl
                   << std::endl;
+#endif
         }
         while (timestep_number <= EquationData::final_time_step);
 
