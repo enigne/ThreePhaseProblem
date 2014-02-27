@@ -302,7 +302,8 @@ void MultiPhaseFlowProblem<dim>::make_grid_and_dofs ()
 {
     // -------------------------- Set the dimension and domain here --------------------------
     // For squared mesh it should be hyper_cube
-    GridGenerator::hyper_rectangle(triangulation, Point<dim>(x_min,y_max), Point<dim>(x_max,y_min));
+    GridGenerator::hyper_rectangle(triangulation, Point<dim>(EquationData::x_min,EquationData::y_max),
+				 Point<dim>(EquationData::x_max,EquationData::y_min));
     // ---------------------------------------------------------------------------------------
     
     triangulation.refine_global (n_refinement_steps);   // Number of refinement n
