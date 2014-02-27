@@ -18,7 +18,6 @@
 #include <lac/trilinos_block_sparse_matrix.h>
 #include <lac/trilinos_precondition.h>
 #include <lac/trilinos_solver.h>
-
 #include <lac/precondition.h>
 
 #include <deal.II/grid/tria.h>
@@ -29,19 +28,16 @@
 #include <deal.II/grid/tria_boundary_lib.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/grid_refinement.h>
-
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_accessor.h>
 #include <deal.II/dofs/dof_tools.h>
-
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
-
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
@@ -61,39 +57,44 @@
 #include <deal.II/distributed/tria.h>
 #include <deal.II/distributed/grid_refinement.h>
 
-
 using namespace dealii;
-#define NUMBEROFPHASES 3
-#define TOTALSPREAD_OFF
 
+//====================== Macro for the problem =====================
+#define NUMBEROFPHASES 3    // number of phases
+#define TOTALSPREAD_OFF     // TOATLSPREAD_ON for total spreading,
+                            // TOTALSPREAD_OFF for partial spreading. 
+
+//============== Data for the three phase model =====================
 namespace EquationData
 {
-const double Reno = 1.0;
-const double Cahn = 0.01;
-const double Pe = 100;
-const double velocity[] = {0,0,0};
-const double alpha = 1;
-const double Eps = 0.01;
-
+	const double Reno = 1.0;
+	const double Cahn = 0.01;
+	const double Pe = 100;
+	const double velocity[] = {0,0,0};
+	const double alpha = 1;
+	const double Eps = 0.01;
+	
 #ifdef TOTALSPREAD_ON
-const double s_t[] = {3,1,1};// Total spread
-const double Lambda = 7;
+	const double s_t[] = {3,1,1};// Total spreading
+	const double Lambda = 7;
 #else
-const double s_t[] = {1,0.8,1.4}; // Partial spread
-const double Lambda = 0;
+	const double s_t[] = {1,0.8,1.4}; // Partial spreading
+	const double Lambda = 0;
 #endif
-const double sigma[] = { (s_t[1] + s_t[2]- s_t[0]),
-                         (s_t[0] + s_t[2]- s_t[1]),
-                         (s_t[0] + s_t[1]- s_t[2])
-                       };
-const double sigmaT =  3/(1/sigma[1]+1/sigma[2]+1/sigma[0]);
+
+
+	const double sigma[] = { (s_t[1] + s_t[2]- s_t[0]),
+	                         (s_t[0] + s_t[2]- s_t[1]),
+	                         (s_t[0] + s_t[1]- s_t[2])
+	                       };
+	const double sigmaT =  3/(1/sigma[1]+1/sigma[2]+1/sigma[0]);
 }
 
-////////////////////////linear solver////////////////////////////////////
+////////////////////////////linear solver////////////////////////////////
 namespace LinearSolvers
 {
 unsigned int cg_it;
-
+// preconditioner 
 class IdentityPreconditioner : public Subscriptor
 {
 public:
@@ -107,12 +108,13 @@ public:
     }
 };
 
+// CG Solver  
 template <class PreconditionerA>
 class InverseMatrix : public Subscriptor
 {
 public:
     InverseMatrix (const TrilinosWrappers::SparseMatrix &m,
-                   const PreconditionerA &Apreconditioner); //Matrix &m);
+                   const PreconditionerA &Apreconditioner);  
     void vmult (TrilinosWrappers::MPI::Vector &dst,
                 const TrilinosWrappers::MPI::Vector &src) const;
 
@@ -130,6 +132,7 @@ InverseMatrix (const TrilinosWrappers::SparseMatrix &m,
     a_preconditioner  (Apreconditioner)
 {}
 
+// Overwrite vmult function to implement CG solver
 template <class PreconditionerA>
 void
 InverseMatrix<PreconditionerA>::
@@ -147,6 +150,7 @@ vmult (TrilinosWrappers::MPI::Vector &dst,
     cg_it = cg_it + solver_control1.last_step();
 }
 
+// Preconditioning
 template <class PreconditionerA>
 class BlockPreconditioner : public Subscriptor
 {
@@ -166,6 +170,7 @@ private:
     mutable TrilinosWrappers::MPI::Vector g1, g2;
 };
 
+// Block matrix solver
 template <class PreconditionerA>
 BlockPreconditioner<PreconditionerA>::
 BlockPreconditioner(const TrilinosWrappers::BlockSparseMatrix  &S,
@@ -182,6 +187,7 @@ BlockPreconditioner(const TrilinosWrappers::BlockSparseMatrix  &S,
 
 {}
 
+// Overwrite the method for matrix vector multiplication
 template <class PreconditionerA>
 void BlockPreconditioner<PreconditionerA>::vmult (
     TrilinosWrappers::MPI::BlockVector &dst,
@@ -217,72 +223,74 @@ public:
 private:
     void make_grid_and_dofs ();
     void assemble_constant_matrix ();
-    void assemble_system_replace ();
-    void solve_replace();
+    void assemble_system ();
+    void solve();
     void output_results(const int) const;
 
     ConditionalOStream pcout;
 
+    // FEM objects
     parallel::distributed::Triangulation<dim>   triangulation;
     FE_Q<dim>         fe;
     FESystem<dim>     system_fe;
-    DoFHandler<dim>   dof_handler; //do we need both fe and system_fe and the two DoFHandlers??
+    DoFHandler<dim>   dof_handler;  
     DoFHandler<dim>   system_dof_handler;
     ConstraintMatrix  matrix_constraints; //we might need that when calling some
-    //functions that take *MPI* arguments too
 
+    // System and physical parameters
     unsigned int n_refinement_steps;
-
     double time_step;
     double beps, aeps, ceps, zeps;
     unsigned int timestep_number;
     unsigned int nonlin_it;
     unsigned int lin_it;
 
+    // Reuse system matrix and preconditioner
     TrilinosWrappers::BlockSparseMatrix system_matrix;
+    TrilinosWrappers::SparseMatrix AMG_matrix;
+    std_cxx1x::shared_ptr<TrilinosWrappers::PreconditionAMG>    Amg_preconditioner;
 
+    // Solve n-1 phases
     TrilinosWrappers::MPI::BlockVector solution[NUMBEROFPHASES-1];
     TrilinosWrappers::MPI::BlockVector old_solution[NUMBEROFPHASES-1];
     TrilinosWrappers::MPI::BlockVector lin_solution[NUMBEROFPHASES-1];
     TrilinosWrappers::MPI::BlockVector system_rhs[NUMBEROFPHASES-1];
 
-    TrilinosWrappers::SparseMatrix AMG_matrix;
-
-    std_cxx1x::shared_ptr<TrilinosWrappers::PreconditionAMG>    Amg_preconditioner;
-
-    TimerOutput computing_timer; //new member, have to put it to use as in step-32
+    TimerOutput computing_timer; 
 };
 
-/////////////////////make_grid_and_dofs////////////////////////////////
+//========================== Construction Function ================================
 template <int dim>
 MultiPhaseFlowProblem<dim>::MultiPhaseFlowProblem ()
     :
-    pcout (std::cout,
-           (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) //new in the distributed version
-            == 0)),
-
+    pcout (std::cout, 
+    (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)),
     triangulation (MPI_COMM_WORLD,
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
-                    Triangulation<dim>::smoothing_on_coarsening)), //new in the distributed version
-    fe (1),
-    system_fe(FE_Q<dim>(1),1,
-              FE_Q<dim>(1),1),
+                    Triangulation<dim>::smoothing_on_coarsening)), 
+    fe (1),                         // Basic FEM
+    system_fe(FE_Q<dim>(1),1,       // two variables c and eta
+              FE_Q<dim>(1),1),      
     system_dof_handler(triangulation),
     dof_handler (triangulation),
     computing_timer (pcout,
                      TimerOutput::summary,
-                     TimerOutput::wall_times)  //new in the distributed version
+                     TimerOutput::wall_times)  
 
 {}
 
+//========================== Generate the grid and dofs ================================
 template <int dim>
 void MultiPhaseFlowProblem<dim>::make_grid_and_dofs ()
 {
+    // -------------------------- Set the dimension and domain here --------------------------
+    // For 3D it should be hyper_cube
     GridGenerator::hyper_rectangle(triangulation, Point<dim>(-0.3,0.15), Point<dim>(0.3,-0.15));
-    triangulation.refine_global (n_refinement_steps);
-
-    dof_handler.distribute_dofs (fe);
+    // ---------------------------------------------------------------------------------------
+    
+    triangulation.refine_global (n_refinement_steps);   // Number of refinement n
+    dof_handler.distribute_dofs (fe);  
     system_dof_handler.distribute_dofs (system_fe);
     DoFRenumbering::component_wise (system_dof_handler);
 
@@ -301,7 +309,6 @@ void MultiPhaseFlowProblem<dim>::make_grid_and_dofs ()
 
     std::vector<IndexSet> system_partitioning, system_relevant_partitioning;
     IndexSet system_index_set, system_relevant_set, unknowns_partitioning, unknowns_relevant_partitioning;
-    //IndexSet unknowns_partitioning (n_u), unknowns_relevant_partitioning (n_u);
 
     system_index_set = system_dof_handler.locally_owned_dofs();
     system_partitioning.push_back(system_index_set.get_view(0,n_u));
@@ -318,11 +325,6 @@ void MultiPhaseFlowProblem<dim>::make_grid_and_dofs ()
 
     matrix_constraints.clear ();
     matrix_constraints.reinit (system_relevant_set);
-    /* we might actually not need that at all in our case
-       DoFTools::make_hanging_node_constraints (dof_handler,  //or system_dof_handler??? in step-32 classes of
-    				// constraint objects are the same, as well as function calls to initialize them...
-                                                 matrix_constraints);
-    */
     matrix_constraints.close ();
 
     TrilinosWrappers::BlockSparsityPattern sparsity_pattern (system_partitioning,
@@ -391,6 +393,7 @@ void MultiPhaseFlowProblem<dim>::assemble_constant_matrix ()
     cell = dof_handler.begin_active(),
     endc = dof_handler.end();
 
+	// Mass matrix and stiffness matrix assembly
     for (; cell!=endc; ++cell)
     {
         if (cell->is_locally_owned())
@@ -470,15 +473,10 @@ void MultiPhaseFlowProblem<dim>::assemble_constant_matrix ()
     AMG_matrix.compress(VectorOperation::add);
 }
 
+//------------------Compute Jacobian and update right hand side ----------------------
 template <int dim>
-void MultiPhaseFlowProblem<dim>::assemble_system_replace ()
+void MultiPhaseFlowProblem<dim>::assemble_system ()
 {
-    for (int i = 0; i < NUMBEROFPHASES - 1; i++)
-    {
-        system_rhs[i].block(0) = 0;
-        system_rhs[i].block(1) = 0;
-    }
-
     QGauss<dim>   quadrature_formula (2);
     FEValues<dim> fe_values (fe, quadrature_formula,
                              update_values    | update_gradients |
@@ -493,21 +491,25 @@ void MultiPhaseFlowProblem<dim>::assemble_system_replace ()
     std::vector<unsigned int> local_dof_indices (dofs_per_cell);
     std::vector<double>       solution_values(dofs_per_cell);
 
+    for (int i = 0; i < NUMBEROFPHASES - 1; i++)
+    {
+        system_rhs[i].block(0) = 0;
+        system_rhs[i].block(1) = 0;
+    }
     // temprary variables used in 3-phase
     // for nonlinear term
     std::vector<double>       solution_df1(dofs_per_cell);
     std::vector<double>       solution_df2(dofs_per_cell);
     std::vector<double>       solution_df3(dofs_per_cell);
-
     TrilinosWrappers::MPI::Vector tmp1 (system_rhs[0].block(0));
     TrilinosWrappers::MPI::Vector tmp2 (system_rhs[0].block(0));
     TrilinosWrappers::MPI::Vector tmp3 (system_rhs[0].block(0));
     double F1,F2;
-
     std::vector<double>         phi       (dofs_per_cell);
     std::vector<double>         phi_f       (dofs_per_cell);
     std::vector<Tensor<1,dim> > grad_phi  (dofs_per_cell);
 
+    // Compute Jacobian
     typename DoFHandler<dim>::active_cell_iterator
     cell = dof_handler.begin_active(),
     endc = dof_handler.end();
@@ -523,9 +525,9 @@ void MultiPhaseFlowProblem<dim>::assemble_system_replace ()
 
             cell->get_dof_indices (local_dof_indices);
 
+            // Compute components of nonlinear terms
             for (unsigned int k=0; k<dofs_per_cell; ++k)
             {
-                // Compute components of nonlinear terms
                 double c1,c2,c3;
                 c1 = solution[0].block(1)(local_dof_indices[k]);
                 c2 = solution[1].block(1)(local_dof_indices[k]);
@@ -606,14 +608,14 @@ void MultiPhaseFlowProblem<dim>::assemble_system_replace ()
     }
 }
 
-
+//------------------ Solve nonlinear system for one time step----------------------
 template <int dim>
-void MultiPhaseFlowProblem<dim>::solve_replace ()
+void MultiPhaseFlowProblem<dim>::solve
+	 ()
 {
     double norm_crit  = 1e+3;
     double nonlin_eps = 1e-6;
     unsigned int nonlin_it = 0;
-    //unsigned int lin_it = 0;
     LinearSolvers::cg_it=0;
 
     const LinearSolvers::InverseMatrix<TrilinosWrappers::PreconditionAMG>
@@ -622,12 +624,14 @@ void MultiPhaseFlowProblem<dim>::solve_replace ()
     const LinearSolvers::BlockPreconditioner<TrilinosWrappers::PreconditionAMG>
     preconditioner (system_matrix, AMG_inverse, zeps);
 
+	// Nonlinear Loop
     while (norm_crit>nonlin_eps)
     {
         nonlin_it = nonlin_it +1;
-        assemble_system_replace ();
+        assemble_system ();
         double temp_norm = 0.0;
-
+		
+		// Loop over two phases
         for (int i = 0; i < NUMBEROFPHASES-1; i++)
         {
             TrilinosWrappers::MPI::BlockVector  temp_sol(solution[i]);
@@ -654,7 +658,7 @@ void MultiPhaseFlowProblem<dim>::solve_replace ()
           << std::endl;
 
 }
-
+//------------------Output function ----------------------
 template <int dim>
 void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
 {
@@ -680,15 +684,17 @@ void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
     }
 }
 
+//---------------------------- Main Time loop -------------------------------------
 template <int dim>
 void MultiPhaseFlowProblem<dim>::run (int n_refs)
 {
     n_refinement_steps = n_refs;
     pcout << "Number of refinements: " <<n_refinement_steps<< std::endl;
-
     time_step = std::pow(0.5, double(n_refinement_steps))*0.15*0.5;
     pcout << "Mesh size: " << time_step<< std::endl;
-    time_step = time_step/10.0;//*time_step;
+	
+	// Choose the time step dt = h/10
+    time_step = time_step/10.0;
     pcout << "Time step: " <<time_step<< std::endl;
 
     aeps = 0.75*(EquationData::Cahn*EquationData::Cahn)/time_step;
@@ -705,10 +711,10 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
     //computing_timer.exit_section();
 
     TrilinosWrappers::MPI::BlockVector  init_sol[NUMBEROFPHASES-1];
-
+        
+    // Set up the initial values
     for (int Index=0; Index < NUMBEROFPHASES-1; Index++)
     {
-        // Set up the initial values
         old_solution[Index].block(0)= 0.0;
         init_sol[Index].reinit(solution[Index]);
         typename DoFHandler<dim>::active_cell_iterator
@@ -721,6 +727,7 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
         std::vector<unsigned int> local_dof_indices (dofs_per_cell);
         Point<dim> p;
 
+		// Set the droplet shape
         for (; cell!=endc; ++cell)
         {
             if (cell->is_locally_owned())
@@ -747,50 +754,46 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
             }
         }
 
-
-
         old_solution[Index].compress(VectorOperation::add);
         init_sol[Index] = old_solution[Index];
         solution[Index] = old_solution[Index];
-
     }
 
     double time;
 
     // Prepare AMG preconditioner
     Amg_preconditioner.reset (new TrilinosWrappers::PreconditionAMG());
-
     TrilinosWrappers::PreconditionAMG::AdditionalData Amg_data;
     Amg_data.elliptic = true;
     Amg_data.higher_order_elements = true;
     Amg_data.smoother_sweeps = 2;
     Amg_data.aggregation_threshold = 0.02;
-
     Amg_preconditioner->initialize(AMG_matrix, Amg_data);
 
-    int repeat = 1;
     // Start time loop
+    int repeat = 1;
     pcout<<"BEGIN SECTION inexact Newton with direct replace"<<std::endl;
-    repeat = 1;
     do
     {
+        // Initialize the solution
         for (int Index=0; Index<NUMBEROFPHASES-1; Index++)
         {
             solution[Index] = init_sol[Index];
             old_solution[Index] = init_sol[Index];
         }
-        pcout << "Repeat number " << repeat
-              << std::endl;
+        pcout << "Repeat number " << repeat << std::endl;
+
         time = 0;
         timestep_number = 1;
-        // Nonlinear iterations
+        // Time loop
         do
         {
             pcout << "Timestep " << timestep_number
                   << std::endl;
 
+            // Nonlinear solver
             computing_timer.enter_section("Solve nonlinear system");
-            solve_replace ();
+            solve ();
             computing_timer.exit_section("Solve nonlinear system");
 
             // Update solution from nonlinear method
@@ -806,12 +809,12 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
 
         }
         while (timestep_number <= 10);
+
+        // Output timer information
         computing_timer.print_summary ();
         ++repeat;
     }
     while(repeat<=3);
-//  output_results(1);
-//  output_results(2);
 }
 
 int main (int argc, char *argv[])
@@ -822,7 +825,7 @@ int main (int argc, char *argv[])
         n_refs = atoi(argv[1]);
     else
         n_refs = 6;
-    //std::cout<<n_refs<<std::endl;
+
     deallog.depth_console(0);
     MultiPhaseFlowProblem<2> Multi_Phase_Flow_Problem;
     Multi_Phase_Flow_Problem.run (n_refs);
