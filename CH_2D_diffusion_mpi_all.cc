@@ -828,15 +828,15 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
                   << std::endl;
 #endif
         }
-     //   while (timestep_number <= EquationData::final_time_step);
+       // while (timestep_number <= EquationData::final_time_step);
 	while(time < 5);
         // Output timer information
         computing_timer.print_summary ();
         ++repeat;
     }
     while(repeat<=EquationData::num_repeat);
-   // output_results(1);
-   // output_results(2);
+    output_results(1);
+    output_results(2);
 }
 
 int main (int argc, char *argv[])
