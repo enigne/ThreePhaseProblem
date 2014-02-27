@@ -84,7 +84,7 @@ namespace EquationData
     const double y_max = 0.15;
 
     // Time
-    const double divH = 3; // means dt=h/4
+    const double divH = 16; // means dt=h/4
     const double final_time_step = 20; //Default timestep
 
     // Number of repeat tests
@@ -679,26 +679,23 @@ void MultiPhaseFlowProblem<dim>::solve
 template <int dim>
 void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
 {
-    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
-    {
         std::vector<std::string> solution_names;
 
         solution_names.push_back ("c"+std::to_string(pI));
 
         DataOut<dim> data_out;
 
-        data_out.attach_dof_handler (system_dof_handler);
+        data_out.attach_dof_handler (dof_handler);
         data_out.add_data_vector (solution[pI-1].block(1), solution_names);
 
         data_out.build_patches ();
 
         std::ostringstream filename;
-        filename << "solution-c" << pI << "-" << timestep_number << ".vtu";
+        filename << "solution-c" << pI << "-" << timestep_number << ".gpl";
 
         std::ofstream output (filename.str().c_str());
-        data_out.write_vtu (output);
+        data_out.write_gnuplot (output);
         output.close();
-    }
 }
 
 //---------------------------- Main Time loop -------------------------------------
@@ -839,6 +836,8 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
         ++repeat;
     }
     while(repeat<=EquationData::num_repeat);
+    output_results(1);
+    output_results(2);
 }
 
 int main (int argc, char *argv[])
