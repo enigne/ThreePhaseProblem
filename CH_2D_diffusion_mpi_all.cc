@@ -61,9 +61,9 @@ using namespace dealii;
 
 //====================== Macro for the problem =====================
 #define NUMBEROFPHASES 3    // number of phases
-#define TOTALSPREAD_OFF      // TOATLSPREAD_ON for total spreading,
+#define TOTALSPREAD_ON      // TOATLSPREAD_ON for total spreading,
                             // TOTALSPREAD_OFF for partial spreading. 
-#define DETAILED_OUTPUT   // NODETAILED_OUTPUT for no output in each time loop
+#define NODETAILED_OUTPUT   // NODETAILED_OUTPUT for no output in each time loop
                             // DETAILED_OUTPUT for all output
 
 //============== Data for the three phase model =====================
@@ -691,7 +691,7 @@ void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
         data_out.build_patches ();
 
         std::ostringstream filename;
-        filename << "solution-c" << pI << "-" << timestep_number << ".gpl";
+        filename << "solution-c" << pI << "-" << timestep_number << ".vtu";
 
         std::ofstream output (filename.str().c_str());
         data_out.write_gnuplot (output);
@@ -710,7 +710,6 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
                     std::abs(EquationData::y_max-EquationData::y_min));
     pcout << "Mesh size: " << mesh_size<< std::endl;
 	
-	// Choose the time step dt = h/10
     time_step = mesh_size / EquationData::divH;
     pcout << "Time step: " <<time_step<< std::endl;
 
@@ -829,15 +828,15 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
                   << std::endl;
 #endif
         }
-        while (timestep_number <= EquationData::final_time_step);
-
+     //   while (timestep_number <= EquationData::final_time_step);
+	while(time < 5);
         // Output timer information
         computing_timer.print_summary ();
         ++repeat;
     }
     while(repeat<=EquationData::num_repeat);
-    output_results(1);
-    output_results(2);
+   // output_results(1);
+   // output_results(2);
 }
 
 int main (int argc, char *argv[])
