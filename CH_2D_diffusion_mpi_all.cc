@@ -84,7 +84,7 @@ namespace EquationData
     const double y_max = 0.15;
 
     // Time
-    const double divH = 16; // means dt=h/4
+    const double divH = 10; // means dt=h/4
     const double final_time_step = 20; //Default timestep
 
     // Number of repeat tests
@@ -828,15 +828,13 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
                   << std::endl;
 #endif
         }
-       // while (timestep_number <= EquationData::final_time_step);
-	while(time < 5);
+        while (timestep_number <= EquationData::final_time_step);
+        //
         // Output timer information
         computing_timer.print_summary ();
         ++repeat;
     }
     while(repeat<=EquationData::num_repeat);
-    output_results(1);
-    output_results(2);
 }
 
 int main (int argc, char *argv[])
