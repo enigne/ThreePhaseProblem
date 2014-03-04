@@ -84,7 +84,7 @@ namespace EquationData
     const double y_max = 0.15;
 
     // Time
-    const double divH = 10; // means dt=h/4
+    const double divH = 16; // means dt=h/4
     const double final_time_step = 20; //Default timestep
 
     // Number of repeat tests
@@ -92,7 +92,7 @@ namespace EquationData
 
     // Phases parameters for three phase problem
 #ifdef TOTALSPREAD_ON
-	const double s_t[] = {3,1,1};// Total spreading
+	const double s_t[] = {1,1,3};// Total spreading
 	const double Lambda = 7;
 #else
 	const double s_t[] = {1,0.8,1.4}; // Partial spreading
@@ -694,7 +694,7 @@ void MultiPhaseFlowProblem<dim>::output_results (const int pI) const
         filename << "solution-c" << pI << "-" << timestep_number << ".vtu";
 
         std::ofstream output (filename.str().c_str());
-        data_out.write_gnuplot (output);
+        data_out.write_vtu(output);
         output.close();
 }
 
@@ -835,6 +835,9 @@ void MultiPhaseFlowProblem<dim>::run (int n_refs)
         ++repeat;
     }
     while(repeat<=EquationData::num_repeat);
+	output_results(1);
+	output_results(2);
+
 }
 
 int main (int argc, char *argv[])
